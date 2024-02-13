@@ -1,0 +1,116 @@
+require("dotenv").config();
+const express = require("express");
+const ExpressWs = require("express-ws");
+const colors = require("colors");
+
+const { GptService } = require("./services/gpt-service");
+const { StreamService } = require("./services/stream-service");
+const { TranscriptionService } = require("./services/transcription-service");
+const { TextToSpeechService } = require("./services/tts-service");
+
+const app = express();
+ExpressWs(app);
+
+const PORT = 4000;
+// connecting to the phonecall
+app.post("/incoming", (req, res) => {
+  res.status(200);
+  res.type("text/xml");
+  res.end(`           
+  <Response>
+    <Connect>
+      <Stream url="wss://${process.env.SERVER}/connection" />
+    </Connect>
+  </Response>
+  `);
+});
+
+app.ws("/connection", (ws, req) => {
+  ws.on("error", console.error); // error while connnecting to the phonecall
+  // Filled in from start message
+  let streamSid;
+
+  const gptService = new GptService();
+  const streamService = new StreamService(ws);
+  const transcriptionService = new TranscriptionService();
+  const ttsService = new TextToSpeechService({});
+
+  let marks = [];
+  let interactionCount = 0;
+
+  // Incoming from MediaStream
+  ws.on("message", function message(data) {
+    //recieving the message from the phonecall
+    const msg = JSON.parse(data);
+    if (msg.event === "start") {
+      streamSid = msg.start.streamSid;
+      streamService.setStreamSid(streamSid);
+      console.log(
+        `Twilio -> Starting Media Stream for ${streamSid}`.underline.red
+      );
+      ttsService.generate(
+        // first greet message
+        {
+          partialResponseIndex: null,
+          partialResponse: "Hello! How can I assist you today?",
+        },
+        1
+      );
+    } else if (msg.event === "media") {
+      transcriptionService.send(msg.media.payload); //to deepgram to transcribe
+    } else if (msg.event === "mark") {
+      // marking end of message
+      const label = msg.mark.name;
+      console.log(
+        `Twilio -> Audio completed mark (${msg.sequenceNumber}): ${label}`.red
+      );
+      marks = marks.filter((m) => m !== msg.mark.name);
+    } else if (msg.event === "stop") {
+      console.log(`Twilio -> Media stream ${streamSid} ended.`.underline.red);
+    }
+  });
+
+  transcriptionService.on("utterance", async (text) => {
+    // interruption logic
+    if (marks.length > 0 && text?.length > 5) {
+      console.log("Twilio -> Interruption, Clearing stream".red);
+      ws.send(
+        JSON.stringify({
+          streamSid,
+          event: "clear",
+        })
+      );
+    }
+  });
+
+  transcriptionService.on("transcription", async (text) => {
+    //transcribing
+    if (!text) {
+      return;
+    }
+    console.log(`Interaction ${interactionCount} – STT -> GPT: ${text}`.yellow);
+    gptService.completion(text, interactionCount);
+    interactionCount += 1;
+  });
+
+  gptService.on("gptreply", async (gptReply, icount) => {
+    console.log(
+      `Interaction ${icount}: GPT -> TTS: ${gptReply.partialResponse}`.green //gpt response
+    );
+    ttsService.generate(gptReply, icount);
+  });
+
+  ttsService.on("speech", (responseIndex, audio, label, icount) => {
+    //sending audio to stream
+    console.log(`Interaction ${icount}: TTS -> TWILIO: ${label}`.blue);
+
+    streamService.buffer(responseIndex, audio);
+  });
+
+  streamService.on("audiosent", (markLabel) => {
+    marks.push(markLabel);
+  }); // marking audio as sent
+});
+
+app.listen(4000);
+console.log(`Server running on port 4000`);
