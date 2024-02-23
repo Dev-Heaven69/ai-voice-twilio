@@ -1,7 +1,6 @@
 const EventEmitter = require("events");
 const colors = require("colors");
 const OpenAI = require("openai");
-const { start } = require("repl");
 
 class GptService extends EventEmitter {
   constructor() {
@@ -18,7 +17,7 @@ class GptService extends EventEmitter {
       (this.partialResponseIndex = 0);
   }
 
-  async completion(text, interactionCount, role = "user", name = "user",totalTime) {
+  async completion(text, interactionCount, role = "user", name = "user") {
     if (name != "user") {
       this.userContext.push({ role: role, name: name, content: text });
     } else {
@@ -28,12 +27,10 @@ class GptService extends EventEmitter {
     // Step 1: Send user transcription to Chat GPT
     const stream = await this.openai.chat.completions.create({
       // model: "gpt-4-1106-preview",
-      model: "gpt-3.5-turbo",
+      model: "gpt-4",
       messages: this.userContext,
       stream: true,
     });
-
-    startTime = new Date().getTime();
 
     let completeResponse = "";
     let partialResponse = "";
@@ -57,10 +54,8 @@ class GptService extends EventEmitter {
           partialResponseIndex: this.partialResponseIndex,
           partialResponse,
         };
-        endTime = new Date().getTime();
-        totalTime = endTime - startTime;
 
-        this.emit("gptreply", gptReply, interactionCount,totalTime);
+        this.emit("gptreply", gptReply, interactionCount);
         this.partialResponseIndex++;
         partialResponse = "";
       }
