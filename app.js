@@ -13,17 +13,7 @@ ExpressWs(app);
 
 const PORT = 4000;
 // connecting to the phonecall
-app.post("/incoming", (req, res) => {
-  res.status(200);
-  res.type("text/xml");
-  res.end(`           
-  <Response>
-    <Connect>
-      <Stream url="wss://${process.env.SERVER}/connection" />
-    </Connect>
-  </Response>
-  `);
-});
+
 
 app.ws("/connection", (ws, req) => {
   ws.on("error", console.error); // error while connnecting to the phonecall
@@ -88,23 +78,23 @@ app.ws("/connection", (ws, req) => {
     if (!text) {
       return;
     }
-    console.log(`Interaction ${interactionCount} – STT -> GPT: ${text}`.yellow);
-    gptService.completion(text, interactionCount);
+    console.log(`Interaction ${interactionCount} – STT -> GPT: ${text} - total time  ${totalTime}ms`.yellow);
+    gptService.completion(text, interactionCount,totalTime);
     interactionCount += 1;
   });
 
-  gptService.on("gptreply", async (gptReply, icount) => {
+  gptService.on("gptreply", async (gptReply, icount,totalTime) => {
     console.log(
-      `Interaction ${icount}: GPT -> TTS: ${gptReply.partialResponse}`.green //gpt response
+      `Interaction ${icount}: GPT -> TTS: ${gptReply.partialResponse} - total time ${totalTime}ms`.green //gpt response
     );
-    ttsService.generate(gptReply, icount);
+    ttsService.generate(gptReply, icount,totalTime);
   });
 
-  ttsService.on("speech", (responseIndex, audio, label, icount) => {
+  ttsService.on("speech", (responseIndex, audio, label, icount,totalTime) => {
     //sending audio to stream
-    console.log(`Interaction ${icount}: TTS -> TWILIO: ${label}`.blue);
+    console.log(`Interaction ${icount}: TTS -> TWILIO: ${label} - total time ${totalTime}`.blue);
 
-    streamService.buffer(responseIndex, audio);
+    streamService.buffer(responseIndex, audio,totalTime);
   });
 
   streamService.on("audiosent", (markLabel) => {

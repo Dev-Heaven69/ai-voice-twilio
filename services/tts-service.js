@@ -10,7 +10,7 @@ class TextToSpeechService extends EventEmitter {
     this.speechBuffer = {};
   }
 
-  async generate(gptReply, interactionCount) {
+  async generate(gptReply, interactionCount,totalTime) {
     const { partialResponseIndex, partialResponse } = gptReply;
 
     if (!partialResponse) {
@@ -34,13 +34,17 @@ class TextToSpeechService extends EventEmitter {
           }),
         }
       );
+      startTime = new Date().getTime();
+    
       const audioArrayBuffer = await response.arrayBuffer();
+      totalTime = new Date().getTime() - startTime;
       this.emit(
         "speech",
         partialResponseIndex,
         Buffer.from(audioArrayBuffer).toString("base64"),
         partialResponse,
-        interactionCount
+        interactionCount,
+        totalTime
       );
     } catch (err) {
       console.error("Error occurred in TextToSpeech service");

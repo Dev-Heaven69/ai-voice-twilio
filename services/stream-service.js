@@ -1,4 +1,5 @@
 const EventEmitter = require("events");
+const { totalmem } = require("os");
 const uuid = require("uuid");
 
 class StreamService extends EventEmitter {
@@ -14,9 +15,10 @@ class StreamService extends EventEmitter {
     this.streamSid = streamSid;
   }
   //It is converting the audio into buffer
-  buffer(index, audio) {
+  buffer(index, audio,totalTime) {
     // Escape hatch for intro message, which doesn't have an index
     //when index is null respond with audio
+    startTime = new Date().getTime();
     if (index === null) {
       this.sendAudio(audio);
     }
@@ -48,6 +50,7 @@ class StreamService extends EventEmitter {
     );
     // When the media completes you will receive a `mark` message with the label
     const markLabel = uuid.v4();
+    totalTime = new Date().getTime() - startTime;
     this.ws.send(
       JSON.stringify({
         streamSid: this.streamSid,
@@ -57,7 +60,7 @@ class StreamService extends EventEmitter {
         },
       })
     );
-    this.emit("audiosent", markLabel);
+    this.emit("audiosent", markLabel,totalTime);
   }
 }
 

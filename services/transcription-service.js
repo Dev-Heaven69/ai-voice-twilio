@@ -22,6 +22,7 @@ class TranscriptionService extends EventEmitter {
     this.deepgramLive.addListener(
       "transcriptReceived",
       (transcriptionMessage) => {
+        startTime = new Date().getTime();
         const transcription = JSON.parse(transcriptionMessage);
         const alternatives = transcription.channel?.alternatives;
         let text = "";
@@ -52,6 +53,9 @@ class TranscriptionService extends EventEmitter {
           // if speech_final and is_final that means this text is accurate and it's a natural pause in the speakers speech. We need to send this to the assistant for processing
           if (transcription.speech_final === true) {
             this.speechFinal = true; // this will prevent a utterance end which shows up after speechFinal from sending another response
+            currentTime = new Date().getTime();
+            totalTime = currentTime - startTime;
+            console.log(`STT -> Speech Final: ${this.finalResult} - Total Time: ${totalTime}ms`)
             this.emit("transcription", this.finalResult);
             this.finalResult = "";
           } else {
